@@ -44,7 +44,8 @@ final class LinkedInApiClientTest extends TestCase
         $fake = new FakeHttpClient();
         $fake->queueResponse(new Response(429, ['Retry-After' => '10', 'Content-Type' => 'application/json'], json_encode(['message' => 'Too Many Requests'])));
 
-        $client = new LinkedInApiClient($fake, $psr17, $psr17, new ClientConfig('202401'), 'token');
+        $config = new ClientConfig('202401', ClientConfig::DEFAULT_REST_BASE_URI, ClientConfig::DEFAULT_V2_BASE_URI, 30, null, 0, 1, 1);
+        $client = new LinkedInApiClient($fake, $psr17, $psr17, $config, 'token');
 
         $this->expectException(\Avansaber\LinkedInApi\Exceptions\RateLimitException::class);
         $client->get('anything');

@@ -32,3 +32,5 @@ composer.lock
 /node_modules/
 
 linkedin-postman/
+
+instructions_set_for_linkedin_package.md

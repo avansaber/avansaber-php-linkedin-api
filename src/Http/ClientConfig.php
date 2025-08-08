@@ -17,18 +17,28 @@ final class ClientConfig
     private int $timeoutSeconds;
     private ?LoggerInterface $logger;
 
+    private int $maxRetries;
+    private int $initialRetryDelayMs;
+    private int $maxRetryDelayMs;
+
     public function __construct(
         string $linkedInVersion = '202401',
         string $restBaseUri = self::DEFAULT_REST_BASE_URI,
         string $v2BaseUri = self::DEFAULT_V2_BASE_URI,
         int $timeoutSeconds = 30,
-        ?LoggerInterface $logger = null
+        ?LoggerInterface $logger = null,
+        int $maxRetries = 2,
+        int $initialRetryDelayMs = 200,
+        int $maxRetryDelayMs = 2000
     ) {
         $this->linkedInVersion = $linkedInVersion;
         $this->restBaseUri = rtrim($restBaseUri, '/') . '/';
         $this->v2BaseUri = rtrim($v2BaseUri, '/') . '/';
         $this->timeoutSeconds = $timeoutSeconds;
         $this->logger = $logger;
+        $this->maxRetries = $maxRetries;
+        $this->initialRetryDelayMs = $initialRetryDelayMs;
+        $this->maxRetryDelayMs = $maxRetryDelayMs;
     }
 
     public function getRestBaseUri(): string
@@ -54,5 +64,20 @@ final class ClientConfig
     public function getLogger(): ?LoggerInterface
     {
         return $this->logger;
+    }
+
+    public function getMaxRetries(): int
+    {
+        return $this->maxRetries;
+    }
+
+    public function getInitialRetryDelayMs(): int
+    {
+        return $this->initialRetryDelayMs;
+    }
+
+    public function getMaxRetryDelayMs(): int
+    {
+        return $this->maxRetryDelayMs;
     }
 }

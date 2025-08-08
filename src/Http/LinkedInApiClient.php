@@ -41,55 +41,109 @@ final class LinkedInApiClient
         $this->logger = $config->getLogger();
     }
 
+    /**
+     * @param array<string, string> $headers
+     * @return array<string|int, mixed>
+     */
     public function get(string $path, array $headers = [], bool $useRestBase = true): array
     {
         $response = $this->request('GET', $path, null, $headers, $useRestBase);
         return $this->decodeJson($response);
     }
 
-    public function post(string $path, array $body = null, array $headers = [], bool $useRestBase = true): array
+    /**
+     * @param array<string, mixed>|null $body
+     * @param array<string, string> $headers
+     * @return array<string|int, mixed>
+     */
+    public function post(string $path, ?array $body = null, array $headers = [], bool $useRestBase = true): array
     {
         $payload = $body === null ? null : json_encode($body, JSON_UNESCAPED_SLASHES);
         $response = $this->request('POST', $path, $payload, $headers, $useRestBase);
         return $this->decodeJson($response);
     }
 
+    /**
+     * @param array<string, string> $headers
+     */
     public function request(string $method, string $path, ?string $body, array $headers, bool $useRestBase): ResponseInterface
     {
-        $base = $useRestBase ? $this->config->getRestBaseUri() : $this->config->getV2BaseUri();
-        $uri = rtrim($base, '/') . '/' . ltrim($path, '/');
+        $attempt = 0;
+        $maxRetries = $this->config->getMaxRetries();
+        $delayMs = $this->config->getInitialRetryDelayMs();
 
-        $request = $this->requestFactory->createRequest($method, $uri)
-            ->withHeader('Authorization', 'Bearer ' . $this->accessToken)
-            ->withHeader('Accept', 'application/json')
-            ->withHeader('LinkedIn-Version', $this->config->getLinkedInVersion())
-            ->withHeader('X-Restli-Protocol-Version', '2.0.0')
-            ->withHeader('User-Agent', 'avansaber-php-linkedin-api/1.x');
+        while (true) {
+            $base = $useRestBase ? $this->config->getRestBaseUri() : $this->config->getV2BaseUri();
+            $uri = preg_match('/^https?:\/\//i', $path) === 1
+                ? $path
+                : rtrim($base, '/') . '/' . ltrim($path, '/');
 
-        foreach ($headers as $key => $value) {
-            $request = $request->withHeader($key, (string) $value);
+            $request = $this->requestFactory->createRequest($method, $uri)
+                ->withHeader('Authorization', 'Bearer ' . $this->accessToken)
+                ->withHeader('Accept', 'application/json')
+                ->withHeader('LinkedIn-Version', $this->config->getLinkedInVersion())
+                ->withHeader('X-Restli-Protocol-Version', '2.0.0')
+                ->withHeader('User-Agent', 'avansaber-php-linkedin-api/1.x');
+
+            foreach ($headers as $key => $value) {
+                $request = $request->withHeader($key, (string) $value);
+            }
+
+            if ($body !== null) {
+                $request = $request
+                    ->withHeader('Content-Type', 'application/json')
+                    ->withBody($this->streamFactory->createStream($body));
+            }
+
+            if ($this->logger) {
+                $this->logger->debug('LinkedIn request', [
+                    'method' => $method,
+                    'uri' => (string) $uri,
+                    'headers' => $this->redactSensitiveHeaders($request->getHeaders()),
+                    'body' => $body,
+                    'attempt' => $attempt,
+                ]);
+            }
+
+            $response = $this->httpClient->sendRequest($request);
+
+            $status = $response->getStatusCode();
+            if ($status < 400) {
+                return $response;
+            }
+
+            // Retry policy: GET requests or safe idempotent methods, on 5xx and 429
+            $shouldRetry = false;
+            $retryDelayMs = $delayMs;
+            if ($status === 429) {
+                $shouldRetry = true;
+                $retryAfterHeader = $response->getHeaderLine('Retry-After');
+                if (is_numeric($retryAfterHeader)) {
+                    $retryDelayMs = (int) $retryAfterHeader * 1000;
+                }
+            } elseif ($status >= 500) {
+                $shouldRetry = true;
+            }
+
+            $isIdempotent = strtoupper($method) === 'GET' || strtoupper($method) === 'HEAD';
+            if ($shouldRetry && $isIdempotent && $attempt < $maxRetries) {
+                $this->sleepMs(min($retryDelayMs, $this->config->getMaxRetryDelayMs()));
+                $attempt++;
+                $delayMs = min($this->config->getMaxRetryDelayMs(), $delayMs * 2);
+                continue;
+            }
+
+            // Not retrying further, map and throw
+            $this->throwIfError($response);
         }
+    }
 
-        if ($body !== null) {
-            $request = $request
-                ->withHeader('Content-Type', 'application/json')
-                ->withBody($this->streamFactory->createStream($body));
+    private function sleepMs(int $milliseconds): void
+    {
+        if ($milliseconds <= 0) {
+            return;
         }
-
-        if ($this->logger) {
-            $this->logger->debug('LinkedIn request', [
-                'method' => $method,
-                'uri' => (string) $uri,
-                'headers' => $this->redactSensitiveHeaders($request->getHeaders()),
-                'body' => $body,
-            ]);
-        }
-
-        $response = $this->httpClient->sendRequest($request);
-
-        $this->throwIfError($response);
-
-        return $response;
+        usleep($milliseconds * 1000);
     }
 
     private function throwIfError(ResponseInterface $response): void
@@ -128,12 +182,17 @@ final class LinkedInApiClient
         throw new ApiException($message, $status, $serviceErrorCode, $correlationId);
     }
 
+    /**
+     * @return array<string|int, mixed>
+     */
     private function decodeJson(ResponseInterface $response): array
     {
-        $decoded = $this->safeDecode((string) $response->getBody());
-        return is_array($decoded) ? $decoded : [];
+        return $this->safeDecode((string) $response->getBody());
     }
 
+    /**
+     * @return array<string|int, mixed>
+     */
     private function safeDecode(string $json): array
     {
         if ($json === '') {

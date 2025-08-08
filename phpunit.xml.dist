@@ -9,5 +9,8 @@
     <include>
       <directory suffix=".php">src</directory>
     </include>
+    <report>
+      <text outputFile="php://stdout" showUncoveredFiles="false" />
+    </report>
   </coverage>
 </phpunit>
