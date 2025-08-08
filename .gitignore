@@ -1,0 +1,34 @@
+# Project planning doc (do not commit)
+package-plan.md
+
+# PHP dependencies (managed by Composer)
+/vendor/
+composer.lock
+
+# Environment files
+.env
+.env.*
+
+# IDE / Editor
+/.idea/
+/.vscode/
+
+# macOS
+.DS_Store
+
+# Test / Coverage artifacts
+/coverage/
+/.phpunit.result.cache
+/phpunit.xml.cache
+
+# Static analysis / tooling caches
+/.phpstan
+/.php-cs-fixer.cache
+
+# Misc caches
+/.cache/
+
+# Node (in case examples or docs use it)
+/node_modules/
+
+linkedin-postman/
