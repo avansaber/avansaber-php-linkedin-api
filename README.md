@@ -141,3 +141,54 @@ Many Marketing Developer Platform endpoints require partner/whitelisting.
 - Chunked media upload (videos/documents)
 - More resources and request DTOs (campaign creation/update)
 - Integration tests examples
+
+## Modern LinkedIn API Support (2025 Update)
+
+This package now supports LinkedIn's modern OpenID Connect API while maintaining backward compatibility.
+
+### ✅ Recommended Modern Scopes
+
+```php
+use Avansaber\LinkedInApi\Auth\Scope;
+
+// Modern OpenID Connect scopes (recommended)
+$scopes = [
+    Scope::OPENID->value,    // Use your name and photo
+    Scope::PROFILE->value,   // Use your name and photo  
+    Scope::EMAIL->value,     // Use the primary email address
+];
+
+// Or use the helper method
+$scopes = Scope::getModernProfileScopes();
+```
+
+### 📱 Modern Profile Fetching
+
+```php
+use Avansaber\LinkedInApi\Resources\Me;
+
+$me = new Me($client);
+
+// Modern approach - uses OpenID Connect userinfo endpoint
+$profile = $me->getUserInfo(); // Recommended
+
+// Response format (OpenID Connect standard):
+// {
+//   "sub": "linkedin-user-id",
+//   "name": "John Doe", 
+//   "given_name": "John",
+//   "family_name": "Doe",
+//   "email": "john@example.com",
+//   "picture": "https://..."
+// }
+```
+
+### ⚠️ Migration from Legacy API
+
+| Legacy Scope | Modern Equivalent |
+|--------------|------------------|
+| `r_liteprofile` | `openid` + `profile` |
+| `r_emailaddress` | `email` |
+
+The package automatically handles fallbacks from modern to legacy endpoints for maximum compatibility.
+
